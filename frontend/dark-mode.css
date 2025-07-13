@@ -1,0 +1,183 @@
+/* Dark mode variables */
+.dark {
+    --dark-bg: #0a0a1f;
+    --dark-card: #151530;
+    --dark-border: rgba(255, 255, 255, 0.1);
+    --dark-text: #e0e0ff;
+    --dark-text-muted: #8080a0;
+    --dark-primary: #0095ff;
+    --dark-secondary: #7000ff;
+    --dark-glow: 0 0 10px var(--dark-primary),
+                 0 0 20px rgba(0, 149, 255, 0.5);
+}
+
+/* Dark mode styles */
+.dark body {
+    background: var(--dark-bg);
+    color: var(--dark-text);
+    background-image: 
+        radial-gradient(circle at 100% 0%, rgba(0, 149, 255, 0.05) 0%, transparent 50%);
+}
+
+.dark .bg-gray-800,
+.dark .bg-gray-900 {
+    background: var(--dark-card) !important;
+    border: 1px solid var(--dark-border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dark .text-gray-300,
+.dark .text-gray-400 {
+    color: var(--dark-text-muted);
+}
+
+.dark .border-gray-700 {
+    border-color: var(--dark-border);
+}
+
+/* Task styles in dark mode */
+.dark .task-header:hover {
+    background: var(--dark-primary);
+    color: var(--dark-bg);
+}
+
+.dark .task-header:hover .text-gray-500 {
+    color: rgba(10, 10, 31, 0.7);
+}
+
+.dark .bg-gray-700 {
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(5px);
+}
+
+/* Form styles in dark mode */
+.dark input[type="text"],
+.dark input[type="date"],
+.dark textarea,
+.dark select {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--dark-border);
+    color: var(--dark-text);
+}
+
+.dark input[type="text"]:focus,
+.dark input[type="date"]:focus,
+.dark textarea:focus,
+.dark select:focus {
+    border-color: var(--dark-primary);
+    box-shadow: 0 0 0 2px rgba(0, 149, 255, 0.1);
+}
+
+/* Button styles in dark mode */
+.dark .bg-blue-500,
+.dark .bg-blue-600 {
+    background: var(--dark-primary) !important;
+    color: var(--dark-bg);
+}
+
+.dark .bg-blue-500:hover,
+.dark .bg-blue-600:hover {
+    box-shadow: var(--dark-glow);
+    background: var(--dark-primary) !important;
+}
+
+/* Status and priority badges in dark mode */
+.dark [class*="bg-yellow-100"] {
+    background: rgba(255, 213, 0, 0.15) !important;
+    border-color: rgba(255, 213, 0, 0.3);
+    color: #ffd700 !important;
+}
+
+.dark [class*="bg-blue-100"] {
+    background: rgba(0, 149, 255, 0.15) !important;
+    border-color: rgba(0, 149, 255, 0.3);
+    color: #0095ff !important;
+}
+
+.dark [class*="bg-green-100"] {
+    background: rgba(0, 149, 255, 0.15) !important;
+    border-color: rgba(0, 149, 255, 0.3);
+    color: #0095ff !important;
+}
+
+.dark [class*="bg-red-100"] {
+    background: rgba(255, 0, 85, 0.15) !important;
+    border-color: rgba(255, 0, 85, 0.3);
+    color: #ff0055 !important;
+}
+
+/* Checkbox styles in dark mode */
+.dark input[type="checkbox"] {
+    border-color: var(--dark-primary);
+}
+
+.dark input[type="checkbox"]:checked {
+    background: var(--dark-primary);
+    color: var(--dark-bg);
+}
+
+/* Modal styles in dark mode */
+.dark .modal-content {
+    background: var(--dark-card);
+    border-color: var(--dark-border);
+}
+
+/* Sidebar styles in dark mode */
+.dark #sidebar {
+    background: var(--dark-card) !important;
+    border-right-color: var(--dark-border);
+}
+
+.dark #sidebar a:hover {
+    background: var(--dark-primary);
+    color: var(--dark-bg);
+}
+
+.dark #sidebar a:hover i {
+    color: var(--dark-bg);
+}
+
+/* Chart styles in dark mode */
+.dark canvas {
+    filter: drop-shadow(0 0 10px rgba(0, 149, 255, 0.2));
+}
+
+/* Progress bar in dark mode */
+.dark .bg-gray-200 {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark .bg-blue-600 {
+    background: var(--dark-primary) !important;
+    box-shadow: var(--dark-glow);
+}
+
+/* Scrollbar in dark mode */
+.dark ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: var(--dark-primary);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-primary);
+}
+
+/* Animation for task completion in dark mode */
+@keyframes completedPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 149, 255, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 149, 255, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 149, 255, 0);
+    }
+}
+
+.dark .task-header.completed {
+    animation: completedPulse 2s infinite;
+} 
