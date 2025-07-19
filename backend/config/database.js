@@ -1,4 +1,5 @@
 const { Sequelize } = require('sequelize');
+const initializeModels = require('../models');
 require('dotenv').config();
 
 const DB_CONFIG = {
@@ -95,7 +96,6 @@ async function initializeDatabase(forceSync = false) {
         console.log('Database connection established successfully.');
         
         // Initialize models
-        const initializeModels = require('../models/associations');
         models = initializeModels(sequelize);
         
         // Sync models - only create tables if they don't exist
@@ -118,7 +118,7 @@ async function initializeDatabase(forceSync = false) {
             }
         }
 
-        return true;
+        return models;
     } catch (error) {
         console.error('Database initialization error:', {
             message: error.message,

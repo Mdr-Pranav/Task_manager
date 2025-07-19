@@ -52,6 +52,46 @@ const API = {
             return API.request(`/tasks/${id}`, {
                 method: 'DELETE'
             });
+        },
+
+        async updatePosition(id, position) {
+            return API.request(`/tasks/${id}/position`, {
+                method: 'PATCH',
+                body: JSON.stringify({ position })
+            });
+        }
+    },
+
+    // Subtasks API
+    subtasks: {
+        async getAll(taskId) {
+            return API.request(`/tasks/${taskId}/subtasks`);
+        },
+
+        async create(taskId, data) {
+            return API.request(`/tasks/${taskId}/subtasks`, {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+        },
+
+        async update(taskId, subtaskId, data) {
+            return API.request(`/tasks/${taskId}/subtasks/${subtaskId}`, {
+                method: 'PATCH',
+                body: JSON.stringify(data)
+            });
+        },
+
+        async delete(taskId, subtaskId) {
+            return API.request(`/tasks/${taskId}/subtasks/${subtaskId}`, {
+                method: 'DELETE'
+            });
+        },
+
+        async toggleComplete(taskId, subtaskId) {
+            return API.request(`/tasks/${taskId}/subtasks/${subtaskId}/toggle`, {
+                method: 'PATCH'
+            });
         }
     },
 
@@ -85,4 +125,6 @@ const API = {
             });
         }
     }
-}; 
+};
+
+export default API; 

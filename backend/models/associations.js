@@ -1,40 +1,26 @@
 const { Sequelize } = require('sequelize');
 
-function initializeModels(sequelize) {
-    // Initialize models
-    const Category = require('./Category')(sequelize);
-    const { Task, Subtask } = require('./Task')(sequelize);
-
-    // Define associations
-    Category.hasMany(Task, {
-        foreignKey: 'category_id',
-        as: 'tasks',
-        onDelete: 'SET NULL'
-    });
-
-    Task.belongsTo(Category, {
-        foreignKey: 'category_id',
+function setupAssociations(models) {
+    // Task - Category association
+    models.Task.belongsTo(models.Category, {
+        foreignKey: 'categoryId',
         as: 'category'
     });
+    models.Category.hasMany(models.Task, {
+        foreignKey: 'categoryId',
+        as: 'tasks'
+    });
 
-    Task.hasMany(Subtask, {
-        foreignKey: 'task_id',
+    // Task - Subtask association
+    models.Task.hasMany(models.Subtask, {
+        foreignKey: 'taskId',
         as: 'subtasks',
         onDelete: 'CASCADE'
     });
-
-    Subtask.belongsTo(Task, {
-        foreignKey: 'task_id',
+    models.Subtask.belongsTo(models.Task, {
+        foreignKey: 'taskId',
         as: 'task'
     });
-
-    return {
-        Category,
-        Task,
-        Subtask,
-        sequelize,
-        Sequelize
-    };
 }
 
-module.exports = initializeModels; 
+module.exports = setupAssociations; 

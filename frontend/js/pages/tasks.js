@@ -1,5 +1,6 @@
 import { createTaskStatusChart, createTaskPriorityChart, updateChartTheme } from '../components/charts.js';
 import { initializeNotes, loadNotes, updateNotesList } from '../components/notes.js';
+import API from '../utils/api.js';
 
 let tasks = [];
 let categories = [];
@@ -121,11 +122,11 @@ function setupEventListeners() {
 
         // Handle subtask checkbox clicks
         if (target.classList.contains('subtask-checkbox')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
+            console.log('Subtask checkbox clicked');
             const taskId = parseInt(target.getAttribute('data-task-id'));
             const subtaskId = parseInt(target.getAttribute('data-subtask-id'));
+            
+            console.log('Task ID:', taskId, 'Subtask ID:', subtaskId);
             
             if (isNaN(taskId) || isNaN(subtaskId)) {
                 console.error('Invalid task or subtask ID:', { taskId, subtaskId });
@@ -233,22 +234,28 @@ function applyFilters() {
 async function fetchTasks() {
     try {
         console.log('Fetching tasks...');
-        // Get tasks from localStorage or initialize empty array
-        const storedTasks = localStorage.getItem('tasks');
-        tasks = storedTasks ? JSON.parse(storedTasks) : [];
+        // Get tasks from API
+        const response = await API.tasks.getAll();
+        tasks = Array.isArray(response) ? response : [];
         
-        if (!Array.isArray(tasks)) {
-            tasks = [];
-        }
+        // Ensure all tasks have a position
+        tasks = tasks.map((task, index) => ({
+            ...task,
+            position: task.position || index
+        }));
 
-        filteredTasks = [...tasks]; // Initialize filtered tasks with all tasks
-        window.currentTasks = tasks; // Expose tasks to window for notes component
-        console.log('Tasks array:', tasks);
-        console.log('Filtered tasks array:', filteredTasks);
-        renderTasks();
+        // Sort tasks by position
+        tasks.sort((a, b) => (a.position || 0) - (b.position || 0));
+
+        filteredTasks = [...tasks];
+        window.currentTasks = tasks;
+        
+        console.log('Tasks fetched:', tasks);
+        await renderTasks();
         updateCharts();
     } catch (error) {
         console.error('Error fetching tasks:', error);
+        alert('Error loading tasks. Please refresh the page.');
         tasks = [];
         filteredTasks = [];
         window.currentTasks = [];
@@ -285,42 +292,38 @@ function populateCategoryFilter() {
         ).join('');
 }
 
-// Calculate subtask progress
+// Calculate progress for a task
 function calculateProgress(subtasks) {
-    if (!subtasks || subtasks.length === 0) return 0;
-    const completed = subtasks.filter(subtask => subtask.completed).length;
-    return Math.round((completed / subtasks.length) * 100);
+    if (!subtasks || !Array.isArray(subtasks) || subtasks.length === 0) {
+        return 0;
+    }
+    console.log('Calculating progress for subtasks:', subtasks);
+    console.log('Subtasks completion status:', subtasks.map(s => ({ id: s.id, completed: s.completed })));
+    const completedSubtasks = subtasks.filter(subtask => subtask.completed === true).length;
+    console.log('Number of completed subtasks:', completedSubtasks);
+    const progress = Math.round((completedSubtasks / subtasks.length) * 100);
+    console.log('Progress calculated:', progress + '%');
+    return progress;
 }
 
-// Render subtasks
-function renderSubtasks(subtasks, taskId) {
-    if (!subtasks || !Array.isArray(subtasks)) return '';
+// Get status class for styling
+function getStatusClass(status) {
+    const classes = {
+        'todo': 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+        'in_progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+        'completed': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    };
+    return classes[status] || classes.todo;
+}
 
-    return subtasks.map(subtask => `
-        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div class="flex items-center flex-1">
-                <input type="checkbox" 
-                       class="subtask-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                       data-task-id="${taskId}"
-                       data-subtask-id="${subtask.id}"
-                       ${subtask.completed ? 'checked' : ''}>
-                <div class="ml-3 flex-1">
-                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 ${subtask.completed ? 'line-through text-gray-500 dark:text-gray-400' : ''}">${subtask.title}</div>
-                    ${subtask.description ? `
-                        <div class="text-xs text-gray-500 dark:text-gray-400 ${subtask.completed ? 'line-through' : ''}">${subtask.description}</div>
-                    ` : ''}
-                </div>
-            </div>
-            <div class="flex items-center space-x-2">
-                <button class="delete-subtask-btn text-gray-400 hover:text-gray-500 dark:hover:text-gray-300" 
-                        data-task-id="${taskId}"
-                        data-subtask-id="${subtask.id}"
-                        title="Delete Subtask">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
+// Get priority class for styling
+function getPriorityClass(priority) {
+    const classes = {
+        'low': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+        'medium': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+        'high': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+    };
+    return classes[priority] || classes.medium;
 }
 
 // Render tasks
@@ -337,110 +340,124 @@ function renderTasks() {
         return;
     }
 
-    tasksList.innerHTML = filteredTasks.map((task, index) => {
+    // Create a document fragment for better performance
+    const fragment = document.createDocumentFragment();
+    
+    filteredTasks.forEach((task, index) => {
+        const taskElement = document.createElement('div');
+        taskElement.className = 'task-card bg-white dark:bg-gray-800 rounded-lg shadow-md mb-4 overflow-hidden';
+        taskElement.dataset.taskId = task.id;
+        
         const progress = calculateProgress(task.subtasks);
         const statusClass = getStatusClass(task.status);
         const priorityClass = getPriorityClass(task.priority);
         
-        return `
-            <div class="task-card bg-white dark:bg-gray-800 rounded-lg shadow-md mb-4 overflow-hidden">
-                <div class="task-header p-4" data-task-id="${task.id}">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-3">
-                            <div class="flex flex-col space-y-1">
-                                ${index > 0 ? `
-                                    <button class="move-task-btn text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                                            data-task-id="${task.id}" data-direction="up">
-                                        <i class="fas fa-chevron-up"></i>
-                                    </button>
-                                ` : ''}
-                                ${index < filteredTasks.length - 1 ? `
-                                    <button class="move-task-btn text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                                            data-task-id="${task.id}" data-direction="down">
-                                        <i class="fas fa-chevron-down"></i>
-                                    </button>
-                                ` : ''}
-                            </div>
-                            <button class="toggle-subtasks flex items-center space-x-2" data-task-id="${task.id}">
-                                <i class="fas fa-chevron-right transform transition-transform duration-200"></i>
-                                <h3 class="text-lg font-semibold dark:text-white">${task.title}</h3>
-                            </button>
-                            ${task.category ? 
-                                `<span class="category-tag px-2 py-1 rounded text-sm bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                    ${task.category.name}
-                                </span>` : 
-                                ''
-                            }
+        taskElement.innerHTML = `
+            <div class="task-header p-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex flex-col space-y-1">
+                            ${index > 0 ? `
+                                <button class="move-task-btn text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                        data-task-id="${task.id}" data-direction="up">
+                                    <i class="fas fa-chevron-up"></i>
+                                </button>
+                            ` : ''}
+                            ${index < filteredTasks.length - 1 ? `
+                                <button class="move-task-btn text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                        data-task-id="${task.id}" data-direction="down">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            ` : ''}
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <span class="status-badge ${statusClass} px-2 py-1 rounded text-sm">${task.status}</span>
-                            <span class="priority-badge ${priorityClass} px-2 py-1 rounded text-sm">${task.priority}</span>
-                            <button class="delete-task-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                    data-task-id="${task.id}">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
+                        <button class="toggle-subtasks flex items-center space-x-2">
+                            <i class="fas fa-chevron-right transform transition-transform duration-200"></i>
+                            <h3 class="text-lg font-semibold dark:text-white">${task.title}</h3>
+                        </button>
+                        ${task.category ? 
+                            `<span class="category-tag px-2 py-1 rounded text-sm bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                ${task.category.name}
+                            </span>` : 
+                            ''
+                        }
                     </div>
-                    
-                    ${task.description ? 
-                        `<p class="text-gray-600 dark:text-gray-400 mt-2">${task.description}</p>` : 
-                        ''
-                    }
-                    
-                    <!-- Progress Bar -->
-                    ${task.subtasks && task.subtasks.length > 0 ? `
-                        <div class="mt-3">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-sm text-gray-600 dark:text-gray-400">Progress</span>
-                                <span class="text-sm text-gray-600 dark:text-gray-400">${progress}%</span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress}%"></div>
-                            </div>
-                        </div>
-                    ` : ''}
+                    <div class="flex items-center space-x-2">
+                        <span class="status-badge ${statusClass} px-2 py-1 rounded text-sm">${task.status}</span>
+                        <span class="priority-badge ${priorityClass} px-2 py-1 rounded text-sm">${task.priority}</span>
+                        <button class="delete-task-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                data-task-id="${task.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                ${task.description ? 
+                    `<p class="text-gray-600 dark:text-gray-400 mt-2">${task.description}</p>` : 
+                    ''
+                }
+                
+                <!-- Progress Bar -->
+                <div class="mt-4">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">Progress</span>
+                        <span class="text-sm text-gray-600 dark:text-gray-400 progress-text">${progress}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div class="progress-bar bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
+                    </div>
                 </div>
 
                 <!-- Subtasks Section -->
-                <div class="subtasks-section px-4 pb-4 hidden">
+                <div class="subtasks-section mt-4 hidden">
                     ${task.subtasks && task.subtasks.length > 0 ? `
-                        <div class="subtasks-list space-y-2">
-                            ${task.subtasks.map(subtask => `
-                                <div class="subtask-item flex flex-col bg-gray-50 dark:bg-gray-700 p-3 rounded">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center space-x-3">
-                                            <input type="checkbox" 
-                                                   class="subtask-checkbox form-checkbox h-5 w-5 text-blue-600"
-                                                   data-task-id="${task.id}"
-                                                   data-subtask-id="${subtask.id}"
-                                                   ${subtask.completed ? 'checked' : ''}>
-                                            <span class="text-gray-700 dark:text-gray-300 ${subtask.completed ? 'line-through' : ''}">${subtask.title}</span>
+                        <div class="space-y-2">
+                        ${task.subtasks.map(subtask => `
+                                <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                    <div class="flex items-center flex-1">
+                                        <input type="checkbox" 
+                                               class="subtask-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                               data-task-id="${task.id}"
+                                               data-subtask-id="${subtask.id}"
+                                               ${subtask.completed === true ? 'checked' : ''}>
+                                        <div class="ml-3 flex-1">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100 ${subtask.completed === true ? 'line-through text-gray-500 dark:text-gray-400' : ''}">${subtask.title}</div>
+                                            ${subtask.description ? `
+                                                <div class="text-xs text-gray-500 dark:text-gray-400 ${subtask.completed === true ? 'line-through' : ''}">${subtask.description}</div>
+                                            ` : ''}
                                         </div>
-                                        <button class="delete-subtask-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                                data-task-id="${task.id}"
-                                                data-subtask-id="${subtask.id}">
-                                            <i class="fas fa-times"></i>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button class="delete-subtask-btn text-gray-400 hover:text-gray-500 dark:hover:text-gray-300" 
+                                            data-task-id="${task.id}"
+                                            data-subtask-id="${subtask.id}"
+                                            title="Delete Subtask">
+                                            <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
-                                    ${subtask.description ? `
-                                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-8">
-                                            ${subtask.description}
-                                        </p>
-                                    ` : ''}
                                 </div>
-                            `).join('')}
+                        `).join('')}
                         </div>
-                    ` : ''}
-                    <button class="add-subtask-btn mt-3 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                            data-task-id="${task.id}">
+                    ` : `
+                        <div class="text-center py-4 text-gray-500 dark:text-gray-400">
+                            <p>No subtasks yet</p>
+                        </div>
+                    `}
+                    <button class="add-subtask-btn mt-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        data-task-id="${task.id}">
                         <i class="fas fa-plus mr-1"></i>Add Subtask
                     </button>
                 </div>
             </div>
         `;
-    }).join('');
+        
+        fragment.appendChild(taskElement);
+    });
 
-    // Setup task event listeners
+    // Clear the tasks list and append the fragment
+    tasksList.innerHTML = '';
+    tasksList.appendChild(fragment);
+
+    // Re-attach event listeners
     setupTaskEventListeners();
 }
 
@@ -455,7 +472,20 @@ function setupTaskEventListeners() {
 
     // Add event listeners
     tasksList.addEventListener('click', handleTaskClick);
-    tasksList.addEventListener('change', handleSubtaskChange);
+    tasksList.addEventListener('change', (e) => {
+        const target = e.target;
+        console.log('Change event target:', target);
+        console.log('Target classList:', target.classList);
+        
+        if (target.classList.contains('subtask-checkbox')) {
+            console.log('Checkbox data attributes:', {
+                taskId: target.getAttribute('data-task-id'),
+                subtaskId: target.getAttribute('data-subtask-id'),
+                checked: target.checked
+            });
+            handleSubtaskChange(e);
+        }
+    });
 }
 
 // Handle task-related click events
@@ -505,11 +535,20 @@ function handleTaskClick(e) {
 // Handle subtask checkbox changes
 function handleSubtaskChange(e) {
     const target = e.target;
+    console.log('Handling subtask change');
     if (target.classList.contains('subtask-checkbox')) {
-        const taskId = parseInt(target.dataset.taskId);
-        const subtaskId = target.dataset.subtaskId;
-        if (!isNaN(taskId) && subtaskId) {
-            toggleSubtask(taskId, subtaskId);
+        const taskId = parseInt(target.getAttribute('data-task-id'));
+        const subtaskId = parseInt(target.getAttribute('data-subtask-id'));
+        console.log('Processing subtask change:', { taskId, subtaskId, checked: target.checked });
+        if (!isNaN(taskId) && !isNaN(subtaskId)) {
+            // Don't prevent the default checkbox behavior
+            // Let the checkbox update visually while we process the change
+            toggleSubtask(taskId, subtaskId).catch(error => {
+                console.error('Error in handleSubtaskChange:', error);
+                // The toggleSubtask function will handle reverting the checkbox if needed
+            });
+        } else {
+            console.error('Invalid task or subtask ID in change handler:', { taskId, subtaskId });
         }
     }
 }
@@ -584,7 +623,8 @@ async function handleTaskSubmit(e) {
         categoryId: form.categoryId.value ? parseInt(form.categoryId.value) : null,
         subtasks: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.subtasks || []) : [],
         createdAt: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        position: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.position || tasks.length) : tasks.length
     };
 
     try {
@@ -598,6 +638,9 @@ async function handleTaskSubmit(e) {
             // Add new task
             tasks.push(taskData);
         }
+
+        // Sort tasks by position
+        tasks.sort((a, b) => (a.position || 0) - (b.position || 0));
 
         // Save to localStorage
         localStorage.setItem('tasks', JSON.stringify(tasks));
@@ -694,6 +737,9 @@ async function handleSubtaskSubmit(e) {
 // Toggle subtask completion
 async function toggleSubtask(taskId, subtaskId) {
     try {
+        console.log('Toggling subtask:', { taskId, subtaskId });
+        
+        // Find the task and subtask in the current state
         const taskIndex = tasks.findIndex(t => t.id === taskId);
         if (taskIndex === -1) {
             throw new Error('Task not found');
@@ -704,16 +750,69 @@ async function toggleSubtask(taskId, subtaskId) {
             throw new Error('Subtask not found');
         }
 
-        // Toggle completion status
-        tasks[taskIndex].subtasks[subtaskIndex].completed = !tasks[taskIndex].subtasks[subtaskIndex].completed;
+        // Get the current completion state
+        const currentState = tasks[taskIndex].subtasks[subtaskIndex].completed;
+        
+        try {
+            // Optimistically update the UI
+            tasks[taskIndex].subtasks[subtaskIndex].completed = !currentState;
+            
+            // Update the progress bar for this specific task
+            const taskElement = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+            if (taskElement) {
+                const progress = calculateProgress(tasks[taskIndex].subtasks);
+                const progressBar = taskElement.querySelector('.progress-bar');
+                const progressText = taskElement.querySelector('.progress-text');
+                if (progressBar && progressText) {
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${progress}%`;
+                }
+            }
 
-        // Save to localStorage
-        localStorage.setItem('tasks', JSON.stringify(tasks));
+            // Call the API to toggle the subtask
+            const updatedSubtask = await API.subtasks.toggleComplete(taskId, subtaskId);
+            console.log('Subtask updated from API:', updatedSubtask);
 
-        await fetchTasks();
+            // Verify the state matches the server response
+            if (tasks[taskIndex].subtasks[subtaskIndex].completed !== updatedSubtask.completed) {
+                // If there's a mismatch, update to match server state
+                tasks[taskIndex].subtasks[subtaskIndex].completed = updatedSubtask.completed;
+                await renderTasks();
+            }
+
+            // Update filteredTasks to match the change
+            const filteredTaskIndex = filteredTasks.findIndex(t => t.id === taskId);
+            if (filteredTaskIndex !== -1) {
+                filteredTasks[filteredTaskIndex] = tasks[taskIndex];
+            }
+        } catch (error) {
+            // If the API call fails, revert the local state
+            tasks[taskIndex].subtasks[subtaskIndex].completed = currentState;
+            
+            // Revert the checkbox state in the UI
+            const checkbox = document.querySelector(`input[data-task-id="${taskId}"][data-subtask-id="${subtaskId}"]`);
+            if (checkbox) {
+                checkbox.checked = currentState;
+            }
+
+            // Update the progress bar back to the original state
+            const taskElement = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+            if (taskElement) {
+                const progress = calculateProgress(tasks[taskIndex].subtasks);
+                const progressBar = taskElement.querySelector('.progress-bar');
+                const progressText = taskElement.querySelector('.progress-text');
+                if (progressBar && progressText) {
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${progress}%`;
+                }
+            }
+
+            console.error('Failed to update subtask on server:', error);
+            alert('Failed to update subtask. Please try again.');
+        }
     } catch (error) {
-        alert(error.message);
-        console.error('Error toggling subtask:', error);
+        console.error('Error in toggleSubtask:', error);
+        alert('An error occurred while updating the subtask.');
     }
 }
 
@@ -731,7 +830,8 @@ async function deleteSubtask(taskId, subtaskId) {
         // Save to localStorage
         localStorage.setItem('tasks', JSON.stringify(tasks));
 
-        await fetchTasks();
+        // Re-render tasks to update progress bar and subtask display
+        renderTasks();
     } catch (error) {
         alert(error.message);
         console.error('Error deleting subtask:', error);
@@ -759,25 +859,6 @@ function updateCharts() {
     }
 }
 
-// Helper functions for status and priority classes
-function getStatusClass(status) {
-    const classes = {
-        'todo': 'bg-yellow-100 text-yellow-800',
-        'in_progress': 'bg-blue-100 text-blue-800',
-        'completed': 'bg-green-100 text-green-800'
-    };
-    return classes[status] || classes.todo;
-}
-
-function getPriorityClass(priority) {
-    const classes = {
-        'low': 'bg-gray-100 text-gray-800',
-        'medium': 'bg-orange-100 text-orange-800',
-        'high': 'bg-red-100 text-red-800'
-    };
-    return classes[priority] || classes.medium;
-}
-
 // Populate category selects
 function populateCategorySelects() {
     const categorySelects = document.querySelectorAll('select[name="categoryId"]');
@@ -791,55 +872,53 @@ function populateCategorySelects() {
 
 // Move task up or down in the list
 async function moveTask(taskId, direction) {
-    const taskIndex = filteredTasks.findIndex(t => t.id === taskId);
-    if (taskIndex === -1) return;
+    console.log('Moving task:', { taskId, direction });
+    
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) {
+        console.error('Task not found:', taskId);
+        return;
+    }
 
     let swapIndex;
     if (direction === 'up' && taskIndex > 0) {
         swapIndex = taskIndex - 1;
-    } else if (direction === 'down' && taskIndex < filteredTasks.length - 1) {
+    } else if (direction === 'down' && taskIndex < tasks.length - 1) {
         swapIndex = taskIndex + 1;
     } else {
-        return; // No valid move possible
+        console.log('No valid move possible:', { taskIndex, direction, tasksLength: tasks.length });
+        return;
     }
 
     try {
-        // Create array of all tasks with their current positions
-        const taskOrders = filteredTasks.map((task, index) => ({
-            id: task.id,
-            position: task.position || index // Fallback to index if position is not set
-        }));
-
-        // Swap positions between the two tasks
-        const temp = taskOrders[taskIndex].position;
-        taskOrders[taskIndex].position = taskOrders[swapIndex].position;
-        taskOrders[swapIndex].position = temp;
-
-        // Log the request payload
-        console.log('Sending reorder request with payload:', { taskOrders });
-
-        // Send reorder request
-        const response = await fetch('/api/tasks/reorder', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ taskOrders })
+        // Get the positions
+        const newPosition = tasks[swapIndex].position;
+        const oldPosition = tasks[taskIndex].position;
+        
+        console.log('Swapping positions:', {
+            taskId,
+            oldPosition,
+            newPosition,
+            swapWithTaskId: tasks[swapIndex].id
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            console.error('Server error response:', errorData);
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // Update the moved task's position in the backend
+        const updatedTask = await API.tasks.updatePosition(taskId, newPosition);
+        console.log('Task position updated:', updatedTask);
 
-        // Update tasks with server response
-        const updatedTasks = await response.json();
-        tasks = updatedTasks;
-        applyFilters(); // This will update filteredTasks and re-render
+        // Refresh the tasks list to get the updated order
+        await fetchTasks();
+        
+        // Re-apply any active filters
+        applyFilters();
+
+        console.log('Tasks refreshed after move');
     } catch (error) {
         console.error('Error reordering tasks:', error);
         alert('Error reordering tasks. Please try again.');
+        
+        // Refresh tasks to ensure UI is in sync with server
+        await fetchTasks();
     }
 }
 

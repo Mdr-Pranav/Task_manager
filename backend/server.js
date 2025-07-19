@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const path = require('path');
-const { initializeDatabase, models: getModels } = require('./config/database');
+const { initializeDatabase } = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,12 +47,9 @@ app.use((err, req, res, next) => {
 // Start server function
 async function startServer() {
     try {
-        // Initialize database without force sync
-        await initializeDatabase(false);
+        // Initialize database and get models
+        const models = await initializeDatabase(false);
         console.log('Database initialized successfully');
-        
-        // Get models after initialization
-        const models = getModels();
         
         // Initialize routes with models
         app.use('/api/tasks', tasksRoutes(models));
