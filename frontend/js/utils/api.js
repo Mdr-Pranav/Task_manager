@@ -103,6 +103,44 @@ const API = {
         }
     },
 
+    // Notes API
+    notes: {
+        async getTaskNotes(taskId) {
+            return API.request(`/notes/task/${taskId}`);
+        },
+
+        async getSubtaskNotes(subtaskId) {
+            return API.request(`/notes/subtask/${subtaskId}`);
+        },
+
+        async createTaskNote(taskId, content) {
+            return API.request(`/notes/task/${taskId}`, {
+                method: 'POST',
+                body: JSON.stringify({ content })
+            });
+        },
+
+        async createSubtaskNote(taskId, subtaskId, content) {
+            return API.request(`/notes/subtask/${taskId}/${subtaskId}`, {
+                method: 'POST',
+                body: JSON.stringify({ content })
+            });
+        },
+
+        async update(noteId, content) {
+            return API.request(`/notes/${noteId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ content })
+            });
+        },
+
+        async delete(noteId) {
+            return API.request(`/notes/${noteId}`, {
+                method: 'DELETE'
+            });
+        }
+    },
+
     // Categories API
     categories: {
         async getAll() {

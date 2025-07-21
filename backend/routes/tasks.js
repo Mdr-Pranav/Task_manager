@@ -24,7 +24,15 @@ module.exports = function(models) {
                     },
                     {
                         model: models.Subtask,
-                        as: 'subtasks'
+                        as: 'subtasks',
+                        include: [{
+                            model: models.Note,
+                            as: 'subtaskNotes'
+                        }]
+                    },
+                    {
+                        model: models.Note,
+                        as: 'taskNotes'
                     }
                 ],
                 order: [['position', 'ASC']]
@@ -38,20 +46,24 @@ module.exports = function(models) {
 
     // POST /api/tasks
     router.post('/', validateTask, async (req, res) => {
+        let transaction;
         try {
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
                 return res.status(400).json({ errors: errors.array() });
             }
 
+            // Start transaction
+            transaction = await models.sequelize.transaction();
+
             // Get the highest position
-            const maxPosition = await models.Task.max('position') || 0;
+            const maxPosition = await models.Task.max('position', { transaction }) || 0;
             
             // Create task with next position
             const task = await models.Task.create({
                 ...req.body,
                 position: maxPosition + 1
-            });
+            }, { transaction });
 
             // Fetch the created task with its relations
             const taskWithRelations = await models.Task.findByPk(task.id, {
@@ -62,15 +74,34 @@ module.exports = function(models) {
                     },
                     {
                         model: models.Subtask,
-                        as: 'subtasks'
+                        as: 'subtasks',
+                        include: [{
+                            model: models.Note,
+                            as: 'subtaskNotes'
+                        }]
+                    },
+                    {
+                        model: models.Note,
+                        as: 'taskNotes'
                     }
-                ]
+                ],
+                transaction
             });
+
+            // Commit transaction
+            await transaction.commit();
 
             res.status(201).json(taskWithRelations);
         } catch (error) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Error rolling back transaction:', rollbackError);
+                }
+            }
             console.error('Error creating task:', error);
-            res.status(400).json({ error: 'Failed to create task' });
+            res.status(400).json({ error: 'Failed to create task: ' + error.message });
         }
     });
 
@@ -112,15 +143,77 @@ module.exports = function(models) {
 
     // DELETE /api/tasks/:id
     router.delete('/:id', async (req, res) => {
+        let transaction;
         try {
-            const task = await models.Task.findByPk(req.params.id);
+            // Start transaction
+            transaction = await models.sequelize.transaction();
+
+            // Find the task with its relations
+            const task = await models.Task.findByPk(req.params.id, {
+                include: [
+                    {
+                        model: models.Subtask,
+                        as: 'subtasks',
+                        include: [{
+                            model: models.Note,
+                            as: 'subtaskNotes'
+                        }]
+                    },
+                    {
+                        model: models.Note,
+                        as: 'taskNotes'
+                    }
+                ],
+                transaction
+            });
+
             if (!task) {
+                await transaction.rollback();
                 return res.status(404).json({ error: 'Task not found' });
             }
 
-            await task.destroy();
+            // Delete all related notes first
+            if (task.taskNotes && task.taskNotes.length > 0) {
+                await models.Note.destroy({
+                    where: { taskId: task.id, subtaskId: null },
+                    transaction
+                });
+            }
+
+            // Delete all subtask notes and subtasks
+            if (task.subtasks && task.subtasks.length > 0) {
+                // Delete subtask notes
+                for (const subtask of task.subtasks) {
+                    if (subtask.subtaskNotes && subtask.subtaskNotes.length > 0) {
+                        await models.Note.destroy({
+                            where: { subtaskId: subtask.id },
+                            transaction
+                        });
+                    }
+                }
+
+                // Delete subtasks
+                await models.Subtask.destroy({
+                    where: { taskId: task.id },
+                    transaction
+                });
+            }
+
+            // Finally delete the task
+            await task.destroy({ transaction });
+
+            // Commit transaction
+            await transaction.commit();
+
             res.status(204).send();
         } catch (error) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Error rolling back transaction:', rollbackError);
+                }
+            }
             console.error('Error deleting task:', error);
             res.status(500).json({ error: 'Failed to delete task' });
         }

@@ -614,36 +614,22 @@ async function handleTaskSubmit(e) {
     const taskId = form.dataset.taskId;
     
     const taskData = {
-        id: taskId ? parseInt(taskId) : Date.now(), // Use timestamp as ID for new tasks
         title: form.title.value,
         description: form.description.value,
         status: form.status.value,
         priority: form.priority.value,
         dueDate: form.dueDate.value,
-        categoryId: form.categoryId.value ? parseInt(form.categoryId.value) : null,
-        subtasks: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.subtasks || []) : [],
-        createdAt: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        position: taskId ? (tasks.find(t => t.id === parseInt(taskId))?.position || tasks.length) : tasks.length
+        categoryId: form.categoryId.value ? parseInt(form.categoryId.value) : null
     };
 
     try {
         if (taskId) {
-            // Update existing task
-            const index = tasks.findIndex(t => t.id === parseInt(taskId));
-            if (index !== -1) {
-                tasks[index] = { ...tasks[index], ...taskData };
-            }
+            // Update existing task via API
+            await API.tasks.update(parseInt(taskId), taskData);
         } else {
-            // Add new task
-            tasks.push(taskData);
+            // Create new task via API
+            await API.tasks.create(taskData);
         }
-
-        // Sort tasks by position
-        tasks.sort((a, b) => (a.position || 0) - (b.position || 0));
-
-        // Save to localStorage
-        localStorage.setItem('tasks', JSON.stringify(tasks));
 
         // Close modal and refresh tasks
         document.querySelector('#task-modal').classList.add('hidden');
@@ -657,12 +643,16 @@ async function handleTaskSubmit(e) {
 // Delete task
 async function deleteTask(taskId) {
     try {
+        // Delete task via API
+        await API.tasks.delete(taskId);
+
         // Remove task from array
         tasks = tasks.filter(t => t.id !== taskId);
         
         // Save to localStorage
         localStorage.setItem('tasks', JSON.stringify(tasks));
 
+        // Refresh tasks list
         await fetchTasks();
     } catch (error) {
         alert(error.message);

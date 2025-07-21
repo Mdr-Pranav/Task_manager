@@ -35,6 +35,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 const tasksRoutes = require('./routes/tasks');
 const categoriesRoutes = require('./routes/categories');
 const settingsRoutes = require('./routes/settings');
+const notesRoutes = require('./routes/notes');
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -47,7 +48,7 @@ app.use((err, req, res, next) => {
 // Start server function
 async function startServer() {
     try {
-        // Initialize database and get models
+        // Initialize database and get models - use alter instead of force sync
         const models = await initializeDatabase(false);
         console.log('Database initialized successfully');
         
@@ -55,6 +56,7 @@ async function startServer() {
         app.use('/api/tasks', tasksRoutes(models));
         app.use('/api/categories', categoriesRoutes(models));
         app.use('/api/settings', settingsRoutes(models));
+        app.use('/api/notes', notesRoutes(models));
 
         // Start listening
         app.listen(PORT, () => {

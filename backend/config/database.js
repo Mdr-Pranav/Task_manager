@@ -53,6 +53,79 @@ async function createDefaultCategories(models) {
     }
 }
 
+// Create a test task if no tasks exist
+async function createTestTask(models) {
+    try {
+        console.log('Checking for existing tasks...');
+        const taskCount = await models.Task.count();
+        console.log('Current task count:', taskCount);
+        
+        if (taskCount === 0) {
+            console.log('Creating test task...');
+            // Create a test task
+            const task = await models.Task.create({
+                title: 'Test Task',
+                description: 'This is a test task',
+                status: 'todo',
+                priority: 'medium',
+                position: 0
+            });
+            console.log('Test task created:', task.toJSON());
+
+            console.log('Creating test subtask...');
+            // Create a subtask for the test task
+            const subtask = await models.Subtask.create({
+                title: 'Test Subtask',
+                description: 'This is a test subtask',
+                taskId: task.id
+            });
+            console.log('Test subtask created:', subtask.toJSON());
+
+            console.log('Creating test task note...');
+            // Create notes for both task and subtask
+            const taskNote = await models.Note.create({
+                content: 'This is a test task note',
+                taskId: task.id
+            });
+            console.log('Test task note created:', taskNote.toJSON());
+
+            console.log('Creating test subtask note...');
+            const subtaskNote = await models.Note.create({
+                content: 'This is a test subtask note',
+                taskId: task.id,
+                subtaskId: subtask.id
+            });
+            console.log('Test subtask note created:', subtaskNote.toJSON());
+
+            console.log('Test task and related items created successfully');
+
+            // Verify the task was created with all relations
+            const verifyTask = await models.Task.findByPk(task.id, {
+                include: [
+                    {
+                        model: models.Subtask,
+                        as: 'subtasks',
+                        include: [{
+                            model: models.Note,
+                            as: 'subtaskNotes'
+                        }]
+                    },
+                    {
+                        model: models.Note,
+                        as: 'taskNotes'
+                    }
+                ]
+            });
+            console.log('Verified created task with relations:', JSON.stringify(verifyTask, null, 2));
+        } else {
+            console.log('Tasks already exist, skipping test task creation');
+        }
+    } catch (error) {
+        console.error('Error creating test task:', error);
+        throw error;
+    }
+}
+
 // Initialize the database connection and models
 async function initializeDatabase(forceSync = false) {
     // First try to connect without database to check if we need to create it
@@ -70,11 +143,9 @@ async function initializeDatabase(forceSync = false) {
 
     try {
         await tempSequelize.authenticate();
-        console.log('Connected to MySQL server successfully.');
         
         // Create database if it doesn't exist
         await tempSequelize.query(`CREATE DATABASE IF NOT EXISTS ${DB_CONFIG.database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-        console.log('Database exists or was created successfully.');
     } finally {
         await tempSequelize.close();
     }
@@ -93,39 +164,44 @@ async function initializeDatabase(forceSync = false) {
 
         // Test the connection
         await sequelize.authenticate();
-        console.log('Database connection established successfully.');
         
         // Initialize models
         models = initializeModels(sequelize);
         
-        // Sync models - only create tables if they don't exist
-        if (forceSync) {
-            // Force sync will drop and recreate all tables
-            await sequelize.sync({ force: true });
-            console.log('Database synchronized with force.');
-            
-            // Create default categories after force sync
-            await createDefaultCategories(models);
-        } else {
-            // Normal sync will only create missing tables
+        // Check if tables exist
+        const tableCheckQueries = [
+            "SHOW TABLES LIKE 'tasks'",
+            "SHOW TABLES LIKE 'subtasks'",
+            "SHOW TABLES LIKE 'notes'",
+            "SHOW TABLES LIKE 'categories'"
+        ];
+
+        const results = await Promise.all(tableCheckQueries.map(query => sequelize.query(query)));
+        const tablesExist = results.every(result => result[0].length > 0);
+
+        if (!tablesExist) {
+            // If any tables are missing, create them
             await sequelize.sync({ alter: true });
-            console.log('Database synchronized - tables altered as needed.');
             
-            // Check if we need to create default categories
+            // Create default categories if needed
             const categoryCount = await models.Category.count();
             if (categoryCount === 0) {
                 await createDefaultCategories(models);
             }
+
+            // Create test task if needed
+            const taskCount = await models.Task.count();
+            if (taskCount === 0) {
+                await createTestTask(models);
+            }
+        } else {
+            // If tables exist, just alter them to add any new columns
+            await sequelize.sync({ alter: true });
         }
 
         return models;
     } catch (error) {
-        console.error('Database initialization error:', {
-            message: error.message,
-            code: error.code,
-            name: error.name,
-            sql: error.sql
-        });
+        console.error('Database initialization error:', error.message);
         
         if (sequelize) {
             try {

@@ -1,6 +1,7 @@
 const initTaskModel = require('./Task');
 const initCategoryModel = require('./Category');
 const initSubtaskModel = require('./Subtask');
+const initNoteModel = require('./Note');
 const setupAssociations = require('./associations');
 
 function initializeModels(sequelize) {
@@ -9,6 +10,7 @@ function initializeModels(sequelize) {
         Task: initTaskModel(sequelize),
         Category: initCategoryModel(sequelize),
         Subtask: initSubtaskModel(sequelize),
+        Note: initNoteModel(sequelize),
         sequelize: sequelize // Add sequelize instance to models object
     };
 

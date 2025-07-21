@@ -37,10 +37,6 @@ function initTaskModel(sequelize) {
                 isIn: [['todo', 'in_progress', 'completed']]
             }
         },
-        notes: {
-            type: DataTypes.TEXT,
-            allowNull: true
-        },
         categoryId: {
             type: DataTypes.INTEGER.UNSIGNED,
             allowNull: true,
