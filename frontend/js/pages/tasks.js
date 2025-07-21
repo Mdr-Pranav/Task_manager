@@ -695,11 +695,9 @@ async function handleSubtaskSubmit(e) {
     }
 
     const subtaskData = {
-        id: subtaskId ? parseInt(subtaskId) : Date.now(), // Use timestamp as ID for new subtasks
-        title: form.title.value,
-        description: form.description.value,
-        completed: false,
-        createdAt: new Date().toISOString()
+        title: form.querySelector('[name="title"]').value,
+        description: form.querySelector('[name="description"]').value,
+        completed: false
     };
 
     try {
@@ -709,17 +707,19 @@ async function handleSubtaskSubmit(e) {
         }
 
         if (subtaskId) {
-            // Update existing subtask
+            // Update existing subtask via API
+            const updatedSubtask = await API.subtasks.update(taskId, subtaskId, subtaskData);
             const subtaskIndex = tasks[taskIndex].subtasks.findIndex(s => s.id === parseInt(subtaskId));
             if (subtaskIndex !== -1) {
-                tasks[taskIndex].subtasks[subtaskIndex] = { ...tasks[taskIndex].subtasks[subtaskIndex], ...subtaskData };
+                tasks[taskIndex].subtasks[subtaskIndex] = { ...tasks[taskIndex].subtasks[subtaskIndex], ...updatedSubtask };
             }
         } else {
-            // Add new subtask
+            // Add new subtask via API
+            const newSubtask = await API.subtasks.create(taskId, subtaskData);
             if (!tasks[taskIndex].subtasks) {
                 tasks[taskIndex].subtasks = [];
             }
-            tasks[taskIndex].subtasks.push(subtaskData);
+            tasks[taskIndex].subtasks.push(newSubtask);
         }
 
         // Save to localStorage
@@ -823,6 +823,9 @@ async function deleteSubtask(taskId, subtaskId) {
         if (taskIndex === -1) {
             throw new Error('Task not found');
         }
+
+        // Delete subtask via API
+        await API.subtasks.delete(taskId, subtaskId);
 
         // Remove subtask from array
         tasks[taskIndex].subtasks = tasks[taskIndex].subtasks.filter(s => s.id !== subtaskId);
