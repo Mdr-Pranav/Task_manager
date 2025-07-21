@@ -17,6 +17,11 @@ const API = {
                 throw new Error(error.message || 'API request failed');
             }
 
+            // For DELETE operations that return 204 No Content
+            if (response.status === 204) {
+                return null;
+            }
+
             return await response.json();
         } catch (error) {
             console.error('API Error:', error);
@@ -84,7 +89,10 @@ const API = {
 
         async delete(taskId, subtaskId) {
             return API.request(`/tasks/${taskId}/subtasks/${subtaskId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
         },
 
