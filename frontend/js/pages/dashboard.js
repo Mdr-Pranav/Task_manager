@@ -43,7 +43,7 @@ function renderDashboard() {
     dashboardPage.innerHTML = `
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Task Statistics -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <div class="stats-card">
                 <h2 class="text-xl font-semibold mb-4 dark:text-white">Task Statistics</h2>
                 <div class="space-y-4">
                     <div class="flex justify-between items-center">
@@ -72,7 +72,7 @@ function renderDashboard() {
             </div>
 
             <!-- Task Status Chart -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <div class="stats-card">
                 <h2 class="text-xl font-semibold mb-4 dark:text-white">Status Distribution</h2>
                 <div class="h-64">
                     <canvas id="statusChart"></canvas>
@@ -80,7 +80,7 @@ function renderDashboard() {
             </div>
 
             <!-- Task Priority Chart -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <div class="stats-card">
                 <h2 class="text-xl font-semibold mb-4 dark:text-white">Priority Distribution</h2>
                 <div class="h-64">
                     <canvas id="priorityChart"></canvas>
@@ -88,7 +88,7 @@ function renderDashboard() {
             </div>
 
             <!-- Recent Tasks -->
-            <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <div class="lg:col-span-2 stats-card">
                 <h2 class="text-xl font-semibold mb-4 dark:text-white">Recent Tasks</h2>
                 <div class="space-y-3">
                     ${renderRecentTasks()}
@@ -96,7 +96,7 @@ function renderDashboard() {
             </div>
 
             <!-- Due Tasks -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <div class="stats-card">
                 <h2 class="text-xl font-semibold mb-4 dark:text-white">Due Soon</h2>
                 <div class="space-y-3">
                     ${renderDueTasks()}
@@ -120,14 +120,14 @@ function renderRecentTasks() {
     }
 
     return recentTasks.map(task => `
-        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200">
             <div class="flex-1">
                 <h3 class="font-medium dark:text-white">${task.title}</h3>
                 <p class="text-sm text-gray-500 dark:text-gray-400">${task.description || 'No description'}</p>
             </div>
             <div class="flex items-center gap-2">
                 <span class="status-badge ${task.status}">${task.status}</span>
-                <span class="priority-indicator ${task.priority}">${task.priority}</span>
+                <span class="priority-badge ${task.priority}">${task.priority}</span>
             </div>
         </div>
     `).join('');
@@ -146,7 +146,7 @@ function renderDueTasks() {
     }
 
     return dueTasks.map(task => `
-        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200">
             <div class="flex-1">
                 <h3 class="font-medium dark:text-white">${task.title}</h3>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -155,7 +155,7 @@ function renderDueTasks() {
             </div>
             <div class="flex items-center gap-2">
                 <span class="status-badge ${task.status}">${task.status}</span>
-                <span class="priority-indicator ${task.priority}">${task.priority}</span>
+                <span class="priority-badge ${task.priority}">${task.priority}</span>
             </div>
         </div>
     `).join('');

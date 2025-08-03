@@ -86,6 +86,64 @@ function setupEventListeners() {
     document.addEventListener('click', async (e) => {
         const target = e.target;
 
+            // Handle move task buttons
+    const moveTaskBtn = target.closest('.move-task-btn');
+    if (moveTaskBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const taskId = parseInt(moveTaskBtn.getAttribute('data-task-id'));
+        const direction = moveTaskBtn.getAttribute('data-direction');
+        
+        if (!isNaN(taskId)) {
+            try {
+                await moveTask(taskId, direction);
+            } catch (error) {
+                console.error('Error moving task:', error);
+            }
+        }
+        return;
+    }
+
+    // Handle task card clicks to toggle subtasks section
+    const taskCard = target.closest('.task-card');
+    if (taskCard && !target.closest('.delete-task-btn') && !target.closest('.delete-subtask-btn')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // If clicked on a subtask row, toggle the subtask
+        const subtaskRow = target.closest('.subtask-row');
+        if (subtaskRow) {
+            const taskId = parseInt(subtaskRow.getAttribute('data-task-id'));
+            const subtaskId = parseInt(subtaskRow.getAttribute('data-subtask-id'));
+            
+            if (!isNaN(taskId) && !isNaN(subtaskId)) {
+                try {
+                    await toggleSubtask(taskId, subtaskId);
+                } catch (error) {
+                    console.error('Error toggling subtask:', error);
+                }
+            }
+            return;
+        }
+
+        // Otherwise, toggle the subtasks section if not clicking a move button
+        if (!target.closest('.move-task-btn')) {
+            const subtasksSection = taskCard.querySelector('.subtasks-section');
+            const chevron = taskCard.querySelector('.fa-chevron-right');
+            
+            if (subtasksSection) {
+                const isHidden = subtasksSection.classList.contains('hidden');
+                subtasksSection.classList.toggle('hidden');
+                
+                if (chevron) {
+                    chevron.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+                }
+            }
+        }
+        return;
+    }
+
         // Handle task expansion
         const toggleBtn = target.closest('.toggle-subtasks');
         if (toggleBtn) {
@@ -176,23 +234,7 @@ function setupEventListeners() {
             return;
         }
 
-        // Handle task move button clicks
-        const moveTaskBtn = target.closest('.move-task-btn');
-        if (moveTaskBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const taskId = parseInt(moveTaskBtn.getAttribute('data-task-id'));
-            const direction = moveTaskBtn.getAttribute('data-direction');
-            
-            if (isNaN(taskId) || !direction) {
-                console.error('Invalid task ID or direction:', { taskId, direction });
-                return;
-            }
-            
-            await moveTask(taskId, direction);
-            return;
-        }
+        // Note: Move task button handling is now at the top of the event listener
     });
 }
 
@@ -412,10 +454,12 @@ function renderTasks() {
                     ${task.subtasks && task.subtasks.length > 0 ? `
                         <div class="space-y-2">
                         ${task.subtasks.map(subtask => `
-                                <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <div class="subtask-row flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
+                                     data-task-id="${task.id}"
+                                     data-subtask-id="${subtask.id}">
                                     <div class="flex items-center flex-1">
                                         <input type="checkbox" 
-                                               class="subtask-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                               class="subtask-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 pointer-events-none"
                                                data-task-id="${task.id}"
                                                data-subtask-id="${subtask.id}"
                                                ${subtask.completed === true ? 'checked' : ''}>
@@ -468,24 +512,9 @@ function setupTaskEventListeners() {
 
     // Remove any existing event listeners
     tasksList.removeEventListener('click', handleTaskClick);
-    tasksList.removeEventListener('change', handleSubtaskChange);
 
     // Add event listeners
     tasksList.addEventListener('click', handleTaskClick);
-    tasksList.addEventListener('change', (e) => {
-        const target = e.target;
-        console.log('Change event target:', target);
-        console.log('Target classList:', target.classList);
-        
-        if (target.classList.contains('subtask-checkbox')) {
-            console.log('Checkbox data attributes:', {
-                taskId: target.getAttribute('data-task-id'),
-                subtaskId: target.getAttribute('data-subtask-id'),
-                checked: target.checked
-            });
-            handleSubtaskChange(e);
-        }
-    });
 }
 
 // Handle task-related click events
@@ -532,26 +561,7 @@ function handleTaskClick(e) {
     }
 }
 
-// Handle subtask checkbox changes
-function handleSubtaskChange(e) {
-    const target = e.target;
-    console.log('Handling subtask change');
-    if (target.classList.contains('subtask-checkbox')) {
-        const taskId = parseInt(target.getAttribute('data-task-id'));
-        const subtaskId = parseInt(target.getAttribute('data-subtask-id'));
-        console.log('Processing subtask change:', { taskId, subtaskId, checked: target.checked });
-        if (!isNaN(taskId) && !isNaN(subtaskId)) {
-            // Don't prevent the default checkbox behavior
-            // Let the checkbox update visually while we process the change
-            toggleSubtask(taskId, subtaskId).catch(error => {
-                console.error('Error in handleSubtaskChange:', error);
-                // The toggleSubtask function will handle reverting the checkbox if needed
-            });
-        } else {
-            console.error('Invalid task or subtask ID in change handler:', { taskId, subtaskId });
-        }
-    }
-}
+
 
 // Show task modal
 function showTaskModal(taskId = null) {
@@ -747,6 +757,12 @@ async function toggleSubtask(taskId, subtaskId) {
             // Optimistically update the UI
             tasks[taskIndex].subtasks[subtaskIndex].completed = !currentState;
             
+            // Update the checkbox state
+            const checkbox = document.querySelector(`input[data-task-id="${taskId}"][data-subtask-id="${subtaskId}"]`);
+            if (checkbox) {
+                checkbox.checked = !currentState;
+            }
+            
             // Update the progress bar for this specific task
             const taskElement = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
             if (taskElement) {
@@ -767,7 +783,24 @@ async function toggleSubtask(taskId, subtaskId) {
             if (tasks[taskIndex].subtasks[subtaskIndex].completed !== updatedSubtask.completed) {
                 // If there's a mismatch, update to match server state
                 tasks[taskIndex].subtasks[subtaskIndex].completed = updatedSubtask.completed;
-                await renderTasks();
+                
+                // Update the checkbox state
+                const checkbox = document.querySelector(`input[data-task-id="${taskId}"][data-subtask-id="${subtaskId}"]`);
+                if (checkbox) {
+                    checkbox.checked = updatedSubtask.completed;
+                }
+                
+                // Update the progress bar
+                const taskElement = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                if (taskElement) {
+                    const progress = calculateProgress(tasks[taskIndex].subtasks);
+                    const progressBar = taskElement.querySelector('.progress-bar');
+                    const progressText = taskElement.querySelector('.progress-text');
+                    if (progressBar && progressText) {
+                        progressBar.style.width = `${progress}%`;
+                        progressText.textContent = `${progress}%`;
+                    }
+                }
             }
 
             // Update filteredTasks to match the change
@@ -820,11 +853,17 @@ async function deleteSubtask(taskId, subtaskId) {
         // Remove subtask from array
         tasks[taskIndex].subtasks = tasks[taskIndex].subtasks.filter(s => s.id !== subtaskId);
 
-        // Save to localStorage
-        localStorage.setItem('tasks', JSON.stringify(tasks));
-
-        // Re-render tasks to update progress bar and subtask display
-        renderTasks();
+        // Update the progress bar for this specific task
+        const taskElement = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (taskElement) {
+            const progress = calculateProgress(tasks[taskIndex].subtasks);
+            const progressBar = taskElement.querySelector('.progress-bar');
+            const progressText = taskElement.querySelector('.progress-text');
+            if (progressBar && progressText) {
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+            }
+        }
     } catch (error) {
         alert(error.message);
         console.error('Error deleting subtask:', error);
